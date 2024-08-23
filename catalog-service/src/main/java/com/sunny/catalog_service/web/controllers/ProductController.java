@@ -18,14 +18,18 @@ import java.util.List;
 public class ProductController {
     @Autowired
     private ProductService productService;
+
     @GetMapping("")
     public List<Product> allProducts() {
+
+        log.info("Finding all products");
         return productService.findAllProducts();
     }
 
     @GetMapping("/{code}")
     public Product productByCode(@PathVariable String code) {
+        log.info("Finding product by code :" + code);
         return productService.findProductByCode(code)
-                .orElseThrow(() -> new ProductNotFoundException("Product with code ["+code+"] doesn't exist"));
+                .orElseThrow(() -> new ProductNotFoundException("Product with code [" + code + "] doesn't exist"));
     }
 }
