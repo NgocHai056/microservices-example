@@ -2,16 +2,17 @@ package com.sunny.catalog_service.services;
 
 import com.sunny.catalog_service.entities.Product;
 import com.sunny.catalog_service.repositories.ProductRepository;
+import com.sunny.catalog_service.utils.MyThreadLocalsHolder;
 import com.sunny.catalog_service.web.models.ProductInventoryResponse;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -20,6 +21,9 @@ public class ProductService {
 
     @Autowired
     private ProductRepository productRepository;
+
+    @Autowired
+    private InventoryServiceClient inventoryServiceClient;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -32,17 +36,20 @@ public class ProductService {
         Optional<Product> productOptional = productRepository.findByCode(code);
 
         if (productOptional.isPresent()) {
-            log.info("Fetching inventory level for product_code: " + code);
-            ResponseEntity<ProductInventoryResponse> productInventoryResponse = restTemplate.getForEntity("http://inventory-service/api/inventory/" + code, ProductInventoryResponse.class);
+            String correlationId = UUID.randomUUID().toString();
+            MyThreadLocalsHolder.setCorrelationId(correlationId);
 
-            if (productInventoryResponse.getStatusCode().is2xxSuccessful()) {
-                Integer quantity = productInventoryResponse.getBody().getAvailableQuantity();
-                log.info("Available quantity: " + quantity);
+            log.info("Before CorrelationID: " + MyThreadLocalsHolder.getCorrelationId());
+            log.info("Fetching inventory level for product_code: " + code);
+
+            Optional<ProductInventoryResponse> itemResponseEntity =
+                    this.inventoryServiceClient.getProductInventoryByCode(code);
+            if (itemResponseEntity.isPresent()) {
+                Integer quantity = itemResponseEntity.get().getAvailableQuantity();
                 productOptional.get().setInStock(quantity > 0);
-            } else {
-                log.error("Unable to get inventory level for product_code: " + code +
-                        ", StatusCode: " + productInventoryResponse.getStatusCode());
             }
+
+            log.info("After CorrelationID: " + MyThreadLocalsHolder.getCorrelationId());
         }
 
         return productOptional;
